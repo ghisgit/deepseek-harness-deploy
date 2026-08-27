@@ -65,4 +65,9 @@ fi
 chown -R "$PUID:$PGID" "$HOME_DIR" "$WORKSPACE" || \
     echo "warning: chown failed for some paths under $HOME_DIR or $WORKSPACE (read-only mounts?)"
 
+# Hand the mise dir (tools installed at build time as root) to the runtime
+# user so `mise install` for a new version works without sudo.
+chown -R "$PUID:$PGID" "${MISE_DATA_DIR:-/mise}" 2>/dev/null || \
+    echo "warning: could not chown mise dir ${MISE_DATA_DIR:-/mise}"
+
 exec gosu "$PUID:$PGID" /usr/local/bin/dsh "$@"

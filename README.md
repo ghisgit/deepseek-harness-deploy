@@ -142,6 +142,14 @@ Restart the service afterwards so the profile's bundle set is picked up:
 docker compose restart dsh
 ```
 
+## Toolchain (mise)
+
+Node.js and pnpm are managed by [mise](https://mise.jdx.dev), which installs
+them under `/mise` and exposes version-pinned shims on `PATH`. The web UI runs
+on the version of Node that dsh requires (see `DSH_NODE`). Inside the container
+the agent can install a different Node/package version with `mise install` /
+`mise use`; `/mise` is writable by the container user.
+
 ## Baked-in user and sudo
 
 The image ships a default `dsh` user (UID/GID `1000`, bash shell, `HOME=/data`)
@@ -221,12 +229,15 @@ stops the web server too — it is the same service.
 | Variable | Default | Description |
 |---|---|---|
 | `PORT` | `3080` | Web server port (host:container) |
-| `BIND_ADDRESS` | `127.0.0.1` | Host address to publish; `0.0.0.0` exposes the harness to the network |
 | `DSH_VERSION` | `latest` | dsh version for local image builds, e.g. `0.1.1-rc.2` |
+| `DSH_NODE` | `24` | mise-managed Node.js major line (e.g. `24`) |
+| `DSH_NPM` | `latest` | mise-managed npm version |
+| `DSH_PNPM` | `latest` | mise-managed pnpm version |
+| `BIND_ADDRESS` | `127.0.0.1` | Host address to publish; `0.0.0.0` exposes the harness to the network |
+| `DSH_TRUSTED_HOSTS` | *(empty)* | Extra `/api` browser-trust authorities (comma-separated) |
 | `PUID` / `PGID` | `1000` | Host user/group id the container runs as |
 | `DATA_DIR` | `./dsh` | Host directory holding the Harness home (mounted at `/data/.dsh`) |
 | `WORKSPACE` | `./workspace` | Host directory mounted at `/workspace` |
-| `DSH_TRUSTED_HOSTS` | *(empty)* | Extra `/api` browser-trust authorities (comma-separated) |
 | `DEEPSEEK_API_KEY` | *(empty)* | Provider key; also configurable in the web UI |
 
 ## License

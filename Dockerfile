@@ -7,6 +7,7 @@ RUN apt-get update \
         bash \
         bash-completion \
         bubblewrap \
+        libatomic1 \
         ca-certificates \
         curl \
         git \
@@ -16,31 +17,41 @@ RUN apt-get update \
         jq \
         procps \
         ripgrep \
-        tar \
     && rm -rf /var/lib/apt/lists/*
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-# DeepSeek Harness (dsh) requires Node.js 22.19+ or 24+. Install the 24.x LTS
-# line through NodeSource; the setup script resolves the architecture on its own
-# (amd64/arm64), so the same Dockerfile builds both platforms.
-RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
-    && apt-get install -y --no-install-recommends nodejs \
-    && rm -rf /var/lib/apt/lists/* \
-    && node --version
+# The runtime is version-managed by mise (https://mise.jdx.dev): the toolshed
+# lives under /mise and its shims prepend PATH, so node/npm/pnpm resolve the
+# pinned versions and the agent can install other versions later. DeepSeek
+# Harness (dsh) requires Node.js 22.19+ or 24+.
+ENV MISE_DATA_DIR="/mise" \
+    MISE_CONFIG_DIR="/mise" \
+    MISE_CACHE_DIR="/mise/cache" \
+    MISE_INSTALL_PATH="/usr/local/bin/mise" \
+    PATH="/mise/shims:$PATH"
+RUN curl -fsSL https://mise.run | sh
 
-# `dsh plugin ...` forwards to pnpm, so install it alongside the harness.
-# Pin npm's global prefix to /usr/local (NodeSource installs node to /usr/bin,
-# which would otherwise place these bins under /usr/bin); the entrypoint execs
-# /usr/local/bin/dsh.
+# Pin the versions mise manages. DSH_NODE is a minor line (24.x -> latest 24),
+# DSH_PNPM matches the upstream repo's pin; both are overwritable at build time.
+ARG DSH_NODE=24
+ARG DSH_NPM=latest
+ARG DSH_PNPM=latest
+RUN mise use -g "node@${DSH_NODE}" "npm@${DSH_NPM}" "pnpm@${DSH_PNPM}" \
+    && node --version \
+    && npm --version \
+    && pnpm --version
+
+# `dsh plugin ...` forwards to pnpm, so pnpm must be on PATH (mise shim above).
+# Pin npm's global prefix to /usr/local so `dsh` lands at /usr/local/bin/dsh
+# (mise's node lives under /mise/installs and its binaries are not on PATH);
+# the entrypoint execs /usr/local/bin/dsh.
 ARG DSH_VERSION=latest
-RUN npm config set prefix /usr/local \
-    && if [ "${DSH_VERSION}" = "latest" ]; then \
-        npm install --global --force @deepseek-ai/dsh@latest; \
+RUN if [ "${DSH_VERSION}" = "latest" ]; then \
+        npm install --global --prefix /usr/local --force @deepseek-ai/dsh@latest; \
     else \
-        npm install --global @deepseek-ai/dsh@${DSH_VERSION}; \
+        npm install --global --prefix /usr/local @deepseek-ai/dsh@${DSH_VERSION}; \
     fi \
-    && npm install --global pnpm \
     && command -v dsh \
     && dsh --version || true
 
