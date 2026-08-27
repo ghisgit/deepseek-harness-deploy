@@ -74,7 +74,7 @@ chown -R "$PUID:$PGID" "${MISE_DATA_DIR:-/mise}" 2>/dev/null || \
     echo "warning: could not chown mise dir ${MISE_DATA_DIR:-/mise}"
 
 # Install any mise-managed tool missing from $MISE_CONFIG_DIR/config.toml
-# (node/pnpm by default). Idempotent: skips tools already installed under
+# (node by default). Idempotent: skips tools already installed under
 # /mise. A failure only warns so the harness still tries to boot.
 gosu "$PUID:$PGID" mise install >/dev/null 2>&1 || \
     echo "warning: mise install failed; continuing"

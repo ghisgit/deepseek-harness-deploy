@@ -146,11 +146,15 @@ docker compose restart dsh
 
 ## Toolchain (mise)
 
-Node.js and pnpm are managed by [mise](https://mise.jdx.dev), which installs
-them under `/mise` and exposes version-pinned shims on `PATH`. The web UI runs
-on the version of Node that dsh requires (see `DSH_NODE`). Inside the container
-the agent can install a different Node/package version with `mise install` /
-`mise use`; `/mise` is writable by the container user.
+The Node.js runtime is managed by [mise](https://mise.jdx.dev), which installs
+it under `/mise` and exposes version-pinned shims on `PATH` (`npm` and `npx`
+ride along with the Node distribution). `pnpm` — which `dsh plugin` forwards
+to — is installed globally via `npm` instead of mise: mise's standalone pnpm
+build is ~440MB, the npm package ~20MB, and this keeps the image small. The
+web UI runs on the version of Node that dsh requires (see `DSH_NODE`). Inside
+the container the agent can install a different Node version (or any npm
+package) with `mise install` / `mise use` / `npm install -g`; `/mise` is
+writable by the container user.
 
 ## Baked-in user and sudo
 
@@ -233,8 +237,7 @@ stops the web server too — it is the same service.
 | `PORT` | `3080` | Web server port (host:container) |
 | `DSH_VERSION` | `latest` | dsh version for local image builds, e.g. `0.1.1-rc.2` |
 | `DSH_NODE` | `24` | mise-managed Node.js major line (e.g. `24`) |
-| `DSH_NPM` | `latest` | mise-managed npm version |
-| `DSH_PNPM` | `latest` | mise-managed pnpm version |
+| `DSH_PNPM` | `latest` | pnpm version, installed globally via npm |
 | `DSH_LOCAL_IMAGE` | `deepseek-harness-deploy:local` | Image tag for local builds (distinct from the `ghcr.io/ghisgit/deepseek-harness-deploy:latest` cloud image) |
 | `BIND_ADDRESS` | `127.0.0.1` | Host address to publish; `0.0.0.0` exposes the harness to the network |
 | `DSH_TRUSTED_HOSTS` | *(empty)* | Extra `/api` browser-trust authorities (comma-separated) |

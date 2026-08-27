@@ -2,6 +2,8 @@ FROM debian:12-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
 
+# Remove apt lists and docs/man pages in this same layer so they never ship
+# in the image (a later RUN would only whiteout them and save no space).
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         bash \
@@ -17,14 +19,16 @@ RUN apt-get update \
         jq \
         procps \
         ripgrep \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /usr/share/doc /usr/share/man
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-# The runtime is version-managed by mise (https://mise.jdx.dev): the toolshed
-# lives under /mise and its shims prepend PATH, so node/npm/pnpm resolve the
-# pinned versions and the agent can install other versions later. DeepSeek
-# Harness (dsh) requires Node.js 22.19+ or 24+.
+# The Node runtime is version-managed by mise (https://mise.jdx.dev): the
+# toolshed lives under /mise and its shims prepend PATH, so `node` (and the
+# npm/npx bundled with it) resolve the pinned version and the agent can
+# install other versions later. DeepSeek Harness (dsh) requires Node.js
+# 22.19+ or 24+.
 ENV MISE_DATA_DIR="/mise" \
     MISE_CONFIG_DIR="/mise" \
     MISE_CACHE_DIR="/mise/cache" \
@@ -32,28 +36,38 @@ ENV MISE_DATA_DIR="/mise" \
     PATH="/mise/shims:$PATH"
 RUN curl -fsSL https://mise.run | sh
 
-# Pin the versions mise manages. DSH_NODE is a minor line (24.x -> latest 24),
-# DSH_PNPM matches the upstream repo's pin; both are overwritable at build time.
+# Pin the Node major line mise manages (DSH_NODE=24 -> latest 24; overwritable
+# at build time). Downloaded tarballs in the mise cache are deleted in this
+# same layer so they don't ship in the image.
 ARG DSH_NODE=24
-ARG DSH_NPM=latest
-ARG DSH_PNPM=latest
-RUN mise use -g "node@${DSH_NODE}" "npm@${DSH_NPM}" "pnpm@${DSH_PNPM}" \
+RUN mise use -g "node@${DSH_NODE}" \
     && node --version \
     && npm --version \
-    && pnpm --version
+    && rm -rf "${MISE_CACHE_DIR}"
 
-# `dsh plugin ...` forwards to pnpm, so pnpm must be on PATH (mise shim above).
+# `dsh plugin ...` forwards to pnpm, so pnpm must be on PATH. Install it
+# globally via npm: the pnpm npm package is ~20MB, while mise's standalone
+# pnpm build is ~440MB. Node's bundled npm is used.
+ARG DSH_PNPM=latest
+# npm's download cache lands in /root/.npm; delete it in this same layer.
+RUN npm install --global --prefix /usr/local "pnpm@${DSH_PNPM}" \
+    && pnpm --version \
+    && rm -rf /root/.npm
+
+# `dsh plugin ...` forwards to pnpm, which is installed globally above.
 # Pin npm's global prefix to /usr/local so `dsh` lands at /usr/local/bin/dsh
 # (mise's node lives under /mise/installs and its binaries are not on PATH);
 # the entrypoint execs /usr/local/bin/dsh.
 ARG DSH_VERSION=latest
+# ~170MB of npm download cache; delete it in this same layer.
 RUN if [ "${DSH_VERSION}" = "latest" ]; then \
         npm install --global --prefix /usr/local --force @deepseek-ai/dsh@latest; \
     else \
         npm install --global --prefix /usr/local @deepseek-ai/dsh@${DSH_VERSION}; \
     fi \
     && command -v dsh \
-    && dsh --version || true
+    && dsh --version || true \
+    && rm -rf /root/.npm
 
 # Bake the dsh user/group (1000:1000, bash shell, home /data) so dev
 # containers ("remoteUser": "dsh") and `docker run --user dsh` work out of

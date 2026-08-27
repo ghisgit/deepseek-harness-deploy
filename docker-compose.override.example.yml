@@ -34,7 +34,6 @@ services:
       args:
         DSH_VERSION: ${DSH_VERSION:-latest}
         DSH_NODE: ${DSH_NODE:-24}
-        DSH_NPM: ${DSH_NPM:-latest}
         DSH_PNPM: ${DSH_PNPM:-latest}
     volumes:
       # Writable dotfiles persisted from data/
