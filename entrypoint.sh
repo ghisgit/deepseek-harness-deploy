@@ -45,6 +45,9 @@ EOF
 fi
 
 if [ "$(id -u)" != "0" ]; then
+    # Already running as the target user: ensure the mise toolchain is present
+    # (idempotent; skips tools already installed under /mise).
+    mise install >/dev/null 2>&1 || echo "warning: mise install failed; continuing"
     exec dsh "$@"
 fi
 
@@ -69,5 +72,11 @@ chown -R "$PUID:$PGID" "$HOME_DIR" "$WORKSPACE" || \
 # user so `mise install` for a new version works without sudo.
 chown -R "$PUID:$PGID" "${MISE_DATA_DIR:-/mise}" 2>/dev/null || \
     echo "warning: could not chown mise dir ${MISE_DATA_DIR:-/mise}"
+
+# Install any mise-managed tool missing from $MISE_CONFIG_DIR/config.toml
+# (node/pnpm by default). Idempotent: skips tools already installed under
+# /mise. A failure only warns so the harness still tries to boot.
+gosu "$PUID:$PGID" mise install >/dev/null 2>&1 || \
+    echo "warning: mise install failed; continuing"
 
 exec gosu "$PUID:$PGID" /usr/local/bin/dsh "$@"
