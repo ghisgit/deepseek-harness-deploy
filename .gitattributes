@@ -1,0 +1,4 @@
+# Line endings must survive cross-platform checkouts: the shell script needs
+# LF for its shebang, and batch files conventionally use CRLF.
+.devcontainer/initialize text eol=lf
+.devcontainer/initialize.cmd text eol=crlf

@@ -1,0 +1,9 @@
+.env
+docker-compose.override.yml
+data/*
+!data/.gitkeep
+dsh/*
+!dsh/.gitkeep
+workspace/*
+!workspace/.gitkeep
+*.tar

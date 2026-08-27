@@ -1,0 +1,14 @@
+.env
+.env.*
+.git
+.github
+.devcontainer
+.vscode
+data
+dsh
+workspace
+docker-compose.yml
+docker-compose.override*.yml
+README.md
+.gitignore
+*.tar

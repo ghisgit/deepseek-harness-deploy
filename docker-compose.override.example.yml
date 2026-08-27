@@ -1,0 +1,43 @@
+# Template for docker-compose.override.yml.
+# Copy to docker-compose.override.yml and adjust locally:
+#   cp docker-compose.override.example.yml docker-compose.override.yml
+#
+# docker compose auto-merges this file with docker-compose.yml, so the base
+# file stays untouched. The override file is git-ignored (it references
+# personal files under data/), so create the mounted source files first —
+# a bind mount fails to start if its source does not exist.
+#
+# Notes:
+# - Do NOT mount the whole data/ directory over /data; mount individual
+#   files instead, one volume line per file. The dsh home is /data/.dsh.
+# - The entrypoint runs `chown -R $PUID:$PGID /data /workspace` at startup:
+#   everything under those two paths gets remapped to the container user.
+#   Drop the :ro suffix for files the container must be able to write.
+#   Read-only mounts under /data or /workspace are tolerated (the chown
+#   warns and continues) but stay unwritable as their name implies.
+#   Mounts outside those paths, like /etc/profile.d below, are unaffected.
+# - Provider credentials can be supplied to the harness home as a
+#   $DSH_HOME/.env file (loaded on startup below), or set DEEPSEEK_API_KEY in
+#   the container environment. Do not commit real credentials.
+#
+# Local builds: the base compose pulls ghcr.io/ghisgit/deepseek-harness-deploy:latest.
+# To build the image locally instead (e.g. when hacking on the Dockerfile),
+# keep the build block below — it overrides the pull and tags the result as
+# the same image name.
+services:
+  dsh:
+    build:
+      context: .
+      args:
+        DSH_VERSION: ${DSH_VERSION:-latest}
+    volumes:
+      # Writable dotfiles persisted from data/
+      - ./data/.npmrc:/data/.npmrc
+      - ./data/.gitconfig:/data/.gitconfig
+      # Harness-home .env, a documented credential/launch environment layer
+      - ./data/dsh-env:/data/.dsh/.env
+      # This repo itself, available inside the workspace
+      - ./:/workspace/deepseek-harness-deploy
+      # Shell profile tweaks, sourced by login shells; safe as :ro because
+      # /etc is outside the chowned paths (/data and /workspace)
+      - ./data/custom.sh:/etc/profile.d/custom.sh:ro

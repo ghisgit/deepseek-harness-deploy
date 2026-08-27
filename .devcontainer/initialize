@@ -1,0 +1,9 @@
+#!/bin/sh
+# Host-side setup for the dev container, run from the opened repo root.
+#
+# docker-compose.override.yml is git-ignored and referenced unconditionally in
+# devcontainer.json, so a fresh clone would fail compose file resolution.
+# Create an empty stub when missing (Compose v2 merges it as a no-op); when
+# present, leave it untouched.
+# On Windows hosts the sibling initialize.cmd runs instead of this script.
+test -f docker-compose.override.yml || touch docker-compose.override.yml

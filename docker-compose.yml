@@ -1,0 +1,37 @@
+services:
+  dsh:
+    # Prebuilt multi-arch image published by GitHub Actions. For local
+    # builds, add the build block from docker-compose.override.example.yml.
+    image: ghcr.io/ghisgit/deepseek-harness-deploy:latest
+    container_name: dsh
+    restart: unless-stopped
+    init: true
+    ports:
+      # The harness web server binds 0.0.0.0 inside the container (see the
+      # generated $DSH_HOME/cordis.patch.yml), but we default to publishing only
+      # on the host loopback because dsh's web UI has no TLS/auth and agents
+      # execute arbitrary code. Set BIND_ADDRESS=0.0.0.0 in .env to expose it.
+      - "${BIND_ADDRESS:-127.0.0.1}:${PORT:-3080}:${PORT:-3080}"
+    env_file:
+      # .env is optional; defaults below apply when it is absent.
+      # (requires Docker Compose v2.24+)
+      - path: .env
+        required: false
+    environment:
+      # DSH_PORT is passed explicitly so the Dockerfile HEALTHCHECK and the
+      # generated cordis.patch.yml stay in sync with the .env value.
+      DSH_PORT: ${PORT:-3080}
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      # Extra authorities the /api browser-trust fence accepts (comma-separated).
+      DSH_TRUSTED_HOSTS: ${DSH_TRUSTED_HOSTS:-}
+      # Optional provider credentials; dsh also reads DEEPSEEK_API_KEY from the
+      # web UI (Settings -> Models) into $DSH_HOME/.credentials.yaml.
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+    volumes:
+      # The whole Harness home (profiles, cordis.patch.yml, settings.yaml,
+      # .credentials.yaml, .env, storages, .agent-presets) is persisted.
+      - ${DATA_DIR:-./dsh}:/data/.dsh
+      - ${WORKSPACE:-./workspace}:/workspace
+    working_dir: /workspace
+    command: ["web", "--no-open"]

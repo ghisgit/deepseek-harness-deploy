@@ -1,0 +1,39 @@
+// VS Code Dev Containers configuration.
+//
+// Reuses the existing compose files. The override must be listed explicitly —
+// Dev Containers does not load docker-compose.override.yml automatically.
+// The container stays alive because the dsh web server keeps running,
+// so there is no need to override the command (the entrypoint hardcodes the
+// dsh binary, so a "sleep infinity" command would not work anyway).
+// The web port needs no VS Code forwarding: docker-compose.yml already
+// publishes it on the host (${PORT:-3080}).
+//
+// Requires Docker Compose v2.24+ for the optional env_file in docker-compose.yml.
+{
+  "name": "dsh",
+  "dockerComposeFile": [
+    "../docker-compose.yml",
+    "../docker-compose.override.yml"
+  ],
+  "service": "dsh",
+  "workspaceFolder": "/workspace",
+
+  // Runs on the host in the opened repo root before the container is created:
+  // docker-compose.override.yml is git-ignored, so on a fresh clone the
+  // dockerComposeFile reference above would fail. The array form resolves
+  // platform-appropriately: ./initialize (POSIX sh) on Linux/macOS hosts,
+  // initialize.cmd (batch) on Windows. Both create an empty stub when the
+  // override file is missing; Compose v2 merges an empty file as a no-op.
+  "initializeCommand": [".devcontainer/initialize"],
+
+  // The entrypoint already remaps UID/GID at runtime via PUID/PGID (.env);
+  // keep Dev Containers from applying its own second UID rewrite.
+  "updateRemoteUserUID": false,
+  "remoteUser": "dsh",
+
+  "customizations": {
+    "vscode": {
+      "extensions": []
+    }
+  }
+}
