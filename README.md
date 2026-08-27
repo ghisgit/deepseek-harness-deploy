@@ -59,7 +59,9 @@ loopback `Host` or a named `DSH_TRUSTED_HOSTS` authority.
 
    By default this pulls the prebuilt image from GHCR (see below). To build
    the image locally instead, copy `docker-compose.override.example.yml` to
-   `docker-compose.override.yml` — its template includes the build block.
+   `docker-compose.override.yml` — its template includes the build block and
+   tags the result with a separate local name (`deepseek-harness-deploy:local`,
+   see `DSH_LOCAL_IMAGE`), so it is never confused with the cloud image.
 
 3. Open `http://127.0.0.1:3080`.
 
@@ -233,6 +235,7 @@ stops the web server too — it is the same service.
 | `DSH_NODE` | `24` | mise-managed Node.js major line (e.g. `24`) |
 | `DSH_NPM` | `latest` | mise-managed npm version |
 | `DSH_PNPM` | `latest` | mise-managed pnpm version |
+| `DSH_LOCAL_IMAGE` | `deepseek-harness-deploy:local` | Image tag for local builds (distinct from the `ghcr.io/ghisgit/deepseek-harness-deploy:latest` cloud image) |
 | `BIND_ADDRESS` | `127.0.0.1` | Host address to publish; `0.0.0.0` exposes the harness to the network |
 | `DSH_TRUSTED_HOSTS` | *(empty)* | Extra `/api` browser-trust authorities (comma-separated) |
 | `PUID` / `PGID` | `1000` | Host user/group id the container runs as |
