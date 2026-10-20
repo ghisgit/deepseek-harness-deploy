@@ -89,11 +89,21 @@ ENV DSH_HOME=/data/.dsh
 WORKDIR /workspace
 
 # Bake the entrypoint into the image (not a runtime bind mount), so local
-# builds ship the entrypoint from the current tree.
+# builds ship the entrypoint from the current tree. dsh itself always listens
+# on loopback; this tiny Node relay accepts the container interface address on
+# the same port so the compose publish reaches the harness.
 COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+COPY dsh-forward.mjs /usr/local/bin/dsh-forward.mjs
+RUN chmod +x /entrypoint.sh \
+    && chmod 0644 /usr/local/bin/dsh-forward.mjs
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 CMD curl -fsS "http://127.0.0.1:${DSH_PORT:-3080}/" > /dev/null || exit 1
+# Probe the forwarder on the container interface (not 127.0.0.1, which would
+# still answer if the relay died). Without DSH_BIND_IP the entrypoint binds the
+# container's own IPv4, which `hostname -i` reports. The UI answers 401 to an
+# unauthenticated request until the browser token is presented, so 200/303/401
+# all prove the listener is up; `hostname -i` may return IPv6, hence the
+# bracketing.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 CMD sh -c 'port="${DSH_PORT:-3080}"; for host in ${DSH_BIND_IP:-} $(hostname -i 2>/dev/null); do case "$host" in ""|0.0.0.0|::|"[::]") continue ;; *:*) host="[$host]" ;; esac; code=$(curl -s -o /dev/null --max-time 4 --noproxy "*" -w "%{http_code}" "http://$host:$port/" || true); case "$code" in 200|303|401) exit 0 ;; esac; done; exit 1'
 
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["web", "--no-open"]

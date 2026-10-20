@@ -7,10 +7,12 @@ services:
     restart: unless-stopped
     init: true
     ports:
-      # The harness web server binds 0.0.0.0 inside the container (see the
-      # generated $DSH_HOME/cordis.patch.yml), but we default to publishing only
-      # on the host loopback because dsh's web UI has no TLS/auth and agents
-      # execute arbitrary code. Set BIND_ADDRESS=0.0.0.0 in .env to expose it.
+      # dsh binds 127.0.0.1 inside the container (0.2.1 rejects wildcard binds
+      # and 0.2.0 cannot bind a concrete interface); entrypoint.sh runs a small
+      # TCP relay on the container's own interface, so this publish reaches the
+      # harness. We default to publishing only on the host loopback because
+      # dsh's web UI has no TLS/auth and agents execute arbitrary code. Set
+      # BIND_ADDRESS=0.0.0.0 in .env to expose it.
       - "${BIND_ADDRESS:-127.0.0.1}:${PORT:-3080}:${PORT:-3080}"
     env_file:
       # .env is optional; defaults below apply when it is absent.
@@ -18,12 +20,18 @@ services:
       - path: .env
         required: false
     environment:
-      # DSH_PORT is passed explicitly so the Dockerfile HEALTHCHECK and the
-      # generated cordis.patch.yml stay in sync with the .env value.
+      # DSH_PORT is passed explicitly so the forwarder, the `dsh web --port`
+      # argument, and the Dockerfile HEALTHCHECK stay in sync with .env.
       DSH_PORT: ${PORT:-3080}
       PUID: ${PUID:-1000}
       PGID: ${PGID:-1000}
-      # Extra authorities the /api browser-trust fence accepts (comma-separated).
+      # Optional: interface the forwarder listens on. The entrypoint
+      # auto-detects the container's own IPv4; set this for multi-homed
+      # containers (dsh itself always stays on loopback).
+      DSH_BIND_IP: ${DSH_BIND_IP:-}
+      # Extra authorities the /api browser-trust fence accepts (comma-separated;
+      # passed to `dsh web --trusted-host`; the relay's own address is added
+      # automatically).
       DSH_TRUSTED_HOSTS: ${DSH_TRUSTED_HOSTS:-}
       # Optional provider credentials; dsh also reads DEEPSEEK_API_KEY from the
       # web UI (Settings -> Models) into $DSH_HOME/.credentials.yaml.
