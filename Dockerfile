@@ -24,25 +24,31 @@ RUN apt-get update \
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-# The Node runtime is version-managed by mise (https://mise.jdx.dev): the
-# toolshed lives under /mise and its shims prepend PATH, so `node` (and the
-# npm/npx bundled with it) resolve the pinned version and the agent can
+# The Node runtime is version-managed by mise (https://mise.jdx.dev). Its
+# installs and shims live under /mise/data, its config under /mise/config,
+# its download cache under /mise/cache and its state under /mise/state; the
+# shims prepend PATH so `node` (and the npm/npx bundled with it) resolve the
+# pinned version and the agent can
 # install other versions later. DeepSeek Harness (dsh) requires Node.js
 # 22.19+ or 24+.
-ENV MISE_DATA_DIR="/mise" \
-    MISE_CONFIG_DIR="/mise" \
+ENV MISE_DATA_DIR="/mise/data" \
+    MISE_CONFIG_DIR="/mise/config" \
     MISE_CACHE_DIR="/mise/cache" \
+    MISE_STATE_DIR="/mise/state" \
     MISE_INSTALL_PATH="/usr/local/bin/mise" \
-    PATH="/mise/shims:$PATH"
+    PATH="/mise/data/shims:$PATH"
 RUN curl -fsSL https://mise.run | sh
 
 # Pin the Node major line mise manages (DSH_NODE=24 -> latest 24; overwritable
-# at build time). Downloaded tarballs in the mise cache are deleted in this
-# same layer so they don't ship in the image.
+# at build time). The assertions fail the build if the split data/config
+# directories are not the ones mise actually uses. Downloaded tarballs in the
+# mise cache are deleted in this same layer so they don't ship in the image.
 ARG DSH_NODE=24
 RUN mise use -g "node@${DSH_NODE}" \
     && node --version \
     && npm --version \
+    && test -s /mise/data/shims/node \
+    && test -s /mise/config/config.toml \
     && rm -rf "${MISE_CACHE_DIR}"
 
 # `dsh plugin ...` forwards to pnpm, so pnpm must be on PATH. Install it
@@ -56,8 +62,8 @@ RUN npm install --global --prefix /usr/local "pnpm@${DSH_PNPM}" \
 
 # `dsh plugin ...` forwards to pnpm, which is installed globally above.
 # Pin npm's global prefix to /usr/local so `dsh` lands at /usr/local/bin/dsh
-# (mise's node lives under /mise/installs and its binaries are not on PATH);
-# the entrypoint execs /usr/local/bin/dsh.
+# (mise's node lives under /mise/data/installs and its binaries are not on
+# PATH); the entrypoint execs /usr/local/bin/dsh.
 ARG DSH_VERSION=latest
 # ~170MB of npm download cache; delete it in this same layer.
 RUN if [ "${DSH_VERSION}" = "latest" ]; then \
@@ -82,11 +88,14 @@ RUN groupadd -o -g 1000 dsh \
     && echo "dsh ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/dsh \
     && chmod 0440 /etc/sudoers.d/dsh
 
-# No global HOME: gosu resolves the dropped-privileges user's home from
-# /etc/passwd (/data), and the entrypoint exports HOME for both of its paths.
-ENV DSH_HOME=/data/.dsh
+# HOME and the working directory are both the container home: the harness
+# starts sessions there, and mise/npm/dsh resolve their per-user paths from it.
+# Set after the npm install steps above so their /root/.npm caches stay where
+# the cleanup expects them.
+ENV HOME=/data \
+    DSH_HOME=/data/.dsh
 
-WORKDIR /workspace
+WORKDIR /data
 
 # Bake the entrypoint into the image (not a runtime bind mount), so local
 # builds ship the entrypoint from the current tree. dsh itself always listens

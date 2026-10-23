@@ -6,6 +6,7 @@
 .vscode
 data
 dsh
+# legacy host workspace directory; keep it out of the build context
 workspace
 docker-compose.yml
 docker-compose.override*.yml

@@ -37,9 +37,8 @@ services:
       # web UI (Settings -> Models) into $DSH_HOME/.credentials.yaml.
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
     volumes:
-      # The whole Harness home (profiles, cordis.patch.yml, settings.yaml,
-      # .credentials.yaml, .env, storages, .agent-presets) is persisted.
+      # The whole Harness home (profiles, settings.yaml, .credentials.yaml,
+      # .env, storages, .agent-presets) is persisted. `cordis.patch.yml` is an
+      # operator layer; the entrypoint never writes or moves it.
       - ${DATA_DIR:-./dsh}:/data/.dsh
-      - ${WORKSPACE:-./workspace}:/workspace
-    working_dir: /workspace
     command: ["web", "--no-open"]

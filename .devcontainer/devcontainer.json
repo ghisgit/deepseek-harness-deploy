@@ -8,6 +8,10 @@
 // The web port needs no VS Code forwarding: docker-compose.yml already
 // publishes it on the host (${PORT:-3080}).
 //
+// The container home (/data) is the default working directory; the example
+// override mounts this repository at /data/deepseek-harness-deploy, so the
+// editor opens the home directory with the repo inside it.
+//
 // Requires Docker Compose v2.24+ for the optional env_file in docker-compose.yml.
 {
   "name": "dsh",
@@ -16,7 +20,7 @@
     "../docker-compose.override.yml"
   ],
   "service": "dsh",
-  "workspaceFolder": "/workspace",
+  "workspaceFolder": "/data",
 
   // Runs on the host in the opened repo root before the container is created:
   // docker-compose.override.yml is git-ignored, so on a fresh clone the

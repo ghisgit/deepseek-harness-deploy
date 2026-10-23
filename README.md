@@ -15,16 +15,20 @@ powered by [Cordis](https://github.com/cordiverse/cordis). The image builds the 
 
 | Local path | Container path | Purpose |
 |---|---|---|
-| `dsh/` | `/data/.dsh` | The Harness home: profiles, `cordis.patch.yml` (legacy/operator layer), `settings.yaml`, `.credentials.yaml`, `.env`, `storages`, `.agent-presets` |
+| `dsh/` | `/data/.dsh` | The Harness home: profiles, `cordis.patch.yml` (operator layer), `settings.yaml`, `.credentials.yaml`, `.env`, `storages`, `.agent-presets` |
 | `data/` | file-by-file mounts (see below) | other project files you want available in the container home |
-| `workspace/` | `/workspace` | working directory for the web session |
-| `entrypoint.sh` | `/entrypoint.sh` (baked into the image) | creates home dirs, maps `PUID`/`PGID` user, fixes ownership, binds dsh on loopback and relays the container interface to it, drops privileges |
+| `entrypoint.sh` | `/entrypoint.sh` (baked into the image) | maps `PUID`/`PGID`, fixes ownership, binds dsh on loopback and relays the container interface to it, drops privileges |
 | `dsh-forward.mjs` | `/usr/local/bin/dsh-forward.mjs` (baked into the image) | transparent TCP relay from the container interface to dsh's loopback listener |
+
+The container home is `/data` and is also the default working directory; only
+the Harness home (`/data/.dsh`, mounted from `dsh/`) is persisted. The old
+host-side `workspace/` directory is left untouched but is no longer mounted.
 
 ## Security
 
 The web UI ships **without TLS or authentication**, and DeepSeek Harness agents
-**execute arbitrary code** in the workspace. The compose file therefore publishes
+**execute arbitrary code** in the container home (the session working
+directory). The compose file therefore publishes
 **only on the host loopback** by default (`127.0.0.1:3080`):
 
 - For a purely local/SSH-forwarded setup, keep `BIND_ADDRESS=127.0.0.1`.
@@ -76,7 +80,8 @@ browser-trust fence still requires a loopback `Host` or a named
    `DEEPSEEK_API_KEY` in the container environment.)
 
 5. Choose a workspace: click **Choose workspace** and add the container's
-   `/workspace` directory.
+   `/data` home (or a directory you mounted under it, such as
+   `/data/deepseek-harness-deploy`).
 
 The container healthcheck probes the relay on the container interface; the
 status is shown as `(healthy)` in `docker ps`. An unauthenticated request
@@ -124,16 +129,16 @@ host name/IP you reach the published port through, and add that authority to
 DSH_TRUSTED_HOSTS=my-workstation.example.local,10.0.0.5:3080
 ```
 
-Images from before this change generated `$DSH_HOME/cordis.patch.yml` with
-`webserver.host: 0.0.0.0` and `!!js` expressions. A home patch that pins
-host/port overrides the bundle rows that read the `dsh web` flags (and 0.2.1
-rejects the wildcard), so `entrypoint.sh` moves the generated file to
-`cordis.patch.yml.legacy` on the first start. Put custom rows in
+`entrypoint.sh` never creates, rewrites or moves `$DSH_HOME/cordis.patch.yml`;
+it is purely an operator layer. If you upgraded from an image that generated
+it with `webserver.host: 0.0.0.0`, delete that file (or its webserver row)
+before starting: it overrides the `dsh web` bind flags, and dsh 0.2.1 rejects
+the wildcard host. Put custom rows in
 `$DSH_HOME/profiles/web/cordis.patch.yml` instead.
 
 Rollback to a 0.2.0 image is safe: its entrypoint regenerates the `0.0.0.0`
-patch when `cordis.patch.yml` is absent, and the newer entrypoint moves the
-generated file aside before starting.
+patch when `cordis.patch.yml` is absent. The new entrypoint never touches that
+file, so delete a stale patch before rolling forward again.
 
 ## Persisting files into the container home (`/data`)
 
@@ -187,14 +192,16 @@ docker compose restart dsh
 ## Toolchain (mise)
 
 The Node.js runtime is managed by [mise](https://mise.jdx.dev), which installs
-it under `/mise` and exposes version-pinned shims on `PATH` (`npm` and `npx`
-ride along with the Node distribution). `pnpm` — which `dsh plugin` forwards
-to — is installed globally via `npm` instead of mise: mise's standalone pnpm
-build is ~440MB, the npm package ~20MB, and this keeps the image small. The
-web UI runs on the version of Node that dsh requires (see `DSH_NODE`). Inside
-the container the agent can install a different Node version (or any npm
-package) with `mise install` / `mise use` / `npm install -g`; `/mise` is
-writable by the container user.
+it under `/mise/data` (installs and `shims/`) with its config in
+`/mise/config` and its download cache in `/mise/cache`. Version-pinned shims
+are exposed on `PATH` from `/mise/data/shims` (`npm` and `npx` ride along with
+the Node distribution). `pnpm` — which `dsh plugin` forwards to — is installed
+globally via `npm` instead of mise: mise's standalone pnpm build is ~440MB, the
+npm package ~20MB, and this keeps the image small. The web UI runs on the
+version of Node that dsh requires (see `DSH_NODE`). Inside the container the
+agent can install a different Node version (or any npm package) with
+`mise install` / `mise use` / `npm install -g`; `/mise` is writable by the
+container user.
 
 ## Baked-in user and sudo
 
@@ -253,8 +260,9 @@ Usage:
 
 What you get:
 
-- A shell/editor session in `/workspace` as the baked `dsh` user, with
-  passwordless `sudo` available.
+- A shell/editor session in `/data` (the container home) as the baked `dsh`
+  user, with passwordless `sudo` available; the example override mounts this
+  repository at `/data/deepseek-harness-deploy`.
 - The running dsh web server is reachable directly at
   `http://localhost:${PORT:-3080}` via compose's own port publishing — no
   VS Code port forwarding needed.
@@ -284,7 +292,6 @@ stops the web server too — it is the same service.
 | `DSH_TRUSTED_HOSTS` | *(empty)* | Extra `/api` browser-trust authorities (comma-separated) |
 | `PUID` / `PGID` | `1000` | Host user/group id the container runs as |
 | `DATA_DIR` | `./dsh` | Host directory holding the Harness home (mounted at `/data/.dsh`) |
-| `WORKSPACE` | `./workspace` | Host directory mounted at `/workspace` |
 | `DEEPSEEK_API_KEY` | *(empty)* | Provider key; also configurable in the web UI |
 
 ## License

@@ -4,6 +4,6 @@ data/*
 !data/.gitkeep
 dsh/*
 !dsh/.gitkeep
-workspace/*
-!workspace/.gitkeep
+# legacy host workspace directory (no longer mounted)
+workspace/
 *.tar

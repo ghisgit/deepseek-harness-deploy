@@ -9,12 +9,13 @@
 #
 # Notes:
 # - Do NOT mount the whole data/ directory over /data; mount individual
-#   files instead, one volume line per file. The dsh home is /data/.dsh.
-# - The entrypoint runs `chown -R $PUID:$PGID /data /workspace` at startup:
-#   everything under those two paths gets remapped to the container user.
+#   files instead, one volume line per file. The container home is /data and
+#   the Harness home is /data/.dsh.
+# - The entrypoint runs `chown -R $PUID:$PGID /data` and `/mise` at startup:
+#   everything under those paths gets remapped to the container user.
 #   Drop the :ro suffix for files the container must be able to write.
-#   Read-only mounts under /data or /workspace are tolerated (the chown
-#   warns and continues) but stay unwritable as their name implies.
+#   Read-only mounts under /data are tolerated (the chown warns and
+#   continues) but stay unwritable as their name implies.
 #   Mounts outside those paths, like /etc/profile.d below, are unaffected.
 # - Provider credentials can be supplied to the harness home as a
 #   $DSH_HOME/.env file (loaded on startup below), or set DEEPSEEK_API_KEY in
@@ -41,8 +42,13 @@ services:
       - ./data/.gitconfig:/data/.gitconfig
       # Harness-home .env, a documented credential/launch environment layer
       - ./data/dsh-env:/data/.dsh/.env
-      # This repo itself, available inside the workspace
-      - ./:/workspace/deepseek-harness-deploy
+      # This repo itself, available inside the container home
+      - ./:/data/deepseek-harness-deploy
       # Shell profile tweaks, sourced by login shells; safe as :ro because
-      # /etc is outside the chowned paths (/data and /workspace)
+      # /etc is outside the chowned paths (/data and /mise)
       - ./data/custom.sh:/etc/profile.d/custom.sh:ro
+      # Persist mise toolchains, global config, cache and state.
+      - mise:/mise
+
+volumes:
+  mise:
