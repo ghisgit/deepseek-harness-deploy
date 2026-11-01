@@ -6,6 +6,7 @@ PGID="${PGID:-1000}"
 DSH_USER="${DSH_USER:-dsh}"
 DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
 DSH_PORT="${DSH_PORT:-3080}"
+DSH_VERSION=$(mise ls-remote npm:@deepseek-ai/dsh --prerelease | grep -v alpha | sort -V | tail -1)
 LOOPBACK_HOST="127.0.0.1"
 FORWARD_SCRIPT="/usr/local/bin/dsh-forward.mjs"
 
@@ -14,6 +15,7 @@ warn() { printf 'dsh-entrypoint: warning: %s\n' "$*" >&2; }
 
 # The Harness home must exist before its ownership is fixed.
 mkdir -p "$DSH_HOME"
+mise config set -g "tools.npm:@deepseek-ai/dsh" "$DSH_VERSION"
 
 # Map the runtime uid/gid and fix ownership before anything else runs, so
 # every later step (mise install, relay, dsh) sees the final permissions.
@@ -200,7 +202,7 @@ if [ "$(id -u)" != "0" ]; then
     # (idempotent; skips tools already installed under /mise/data).
     mise install >/dev/null 2>&1 || echo "warning: mise install failed; continuing"
     launch_forwarder
-    exec dsh "$@"
+    exec /mise/data/shims/dsh "$@"
 fi
 
 # Install any mise-managed tool missing from /mise/config/config.toml
@@ -211,4 +213,4 @@ gosu "$PUID:$PGID" mise install >/dev/null 2>&1 || \
 
 launch_forwarder
 
-exec gosu "$PUID:$PGID" /usr/local/bin/dsh "$@"
+exec gosu "$PUID:$PGID" /mise/data/shims/dsh "$@"
