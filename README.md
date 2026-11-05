@@ -24,6 +24,9 @@ The container home is `/data` and is also the default working directory; only
 the Harness home (`/data/.dsh`, mounted from `dsh/`) is persisted. The old
 host-side `workspace/` directory is left untouched but is no longer mounted.
 
+The optional WSL2 root filesystem is built from `wsl.Dockerfile` by the
+`build-wsl` workflow job; see [WSL2 image](#wsl2-image).
+
 ## Security
 
 The web UI ships **without TLS or authentication**, and DeepSeek Harness agents
@@ -225,18 +228,53 @@ GitHub Actions publishes multi-arch images (`linux/amd64`, `linux/arm64`) to
 | `latest` | Most recent build |
 | `<version>` (e.g. `0.1.1-rc.2`) | Pinned dsh release; stable for rollbacks |
 | `sha-<short>` | Exact git commit the image was built from |
+| `wsl` | WSL2 root filesystem image (`linux/amd64`); also exported as an Actions artifact |
 
 When builds run:
 
 - on every push to `main`
 - manually via **Run workflow**, optionally pinning `DSH_VERSION`
-- daily at 02:00 UTC — skipped when the resolved dsh version is already
-  published
+- daily at 02:00 UTC — the standard image build is skipped when the resolved
+  dsh version is already published; the WSL job still refreshes its image and
+  artifact
 
 Pull a specific version manually:
 
 ```sh
 docker pull ghcr.io/ghisgit/deepseek-harness-deploy:<version>
+```
+
+## WSL2 image
+
+The `build-wsl` job builds a WSL2-specific root filesystem from
+`wsl.Dockerfile` on the same triggers as the Compose image. It produces:
+
+- `ghcr.io/ghisgit/deepseek-harness-deploy:wsl`, built and tagged as
+  `deepseek-harness-deploy:wsl` during the job;
+- the `deepseek-harness-deploy-wsl` Actions artifact, containing
+  `deepseek-harness-deploy-wsl.tar` (retained for 14 days).
+
+The WSL image currently targets Windows x64 (`linux/amd64`). It enables
+systemd and creates the default `wsluser` account with passwordless
+`sudo`. The `DSH_VERSION` workflow input currently applies to the Compose
+image only; `wsl.Dockerfile` resolves the latest non-alpha dsh release
+independently.
+
+Download and extract the artifact, then import it from PowerShell:
+
+```powershell
+wsl --import DeepSeekHarness C:\WSL\DeepSeekHarness .\deepseek-harness-deploy-wsl.tar
+wsl --set-default DeepSeekHarness
+wsl -d DeepSeekHarness
+```
+
+Alternatively, pull the GHCR image and export its root filesystem locally:
+
+```sh
+docker pull ghcr.io/ghisgit/deepseek-harness-deploy:wsl
+docker create --name dsh-wsl ghcr.io/ghisgit/deepseek-harness-deploy:wsl
+docker export dsh-wsl -o deepseek-harness-deploy-wsl.tar
+docker rm dsh-wsl
 ```
 
 ## Developing with VS Code (Dev Containers)
